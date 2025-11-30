@@ -6,24 +6,15 @@ from flask import Flask, request
 app = Flask(__name__)
 
 # CONFIGURACIÓN
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN").strip()
+# Aseguramos que el token esté limpio de espacios
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "").strip()
 
-# URL base para COMANDOS (mandar mensajes)
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
-
-# URL base para DESCARGAS (ojo al '/file/')
 BASE_FILE_URL = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}"
-
-FRASES = [
-    "Recibido, cambio y fuera.",
-    "Procesando solicitud...",
-    "Conexión establecida.",
-    "Bits y bytes en orden."
-]
 
 @app.route('/')
 def index():
-    return "Sistema de Enlace de Archivos: ACTIVO 🔗", 200
+    return "Bot Debugger: ONLINE 🕵️‍♂️", 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -33,59 +24,38 @@ def webhook():
 
     chat_id = datos["message"]["chat"]["id"]
 
-    # --- LÓGICA MAESTRA ---
-
-    # CASO 1: FOTO DETECTADA (El Canje del Boleto)
+    # CASO: FOTO DETECTADA
     if "photo" in datos["message"]:
-        # 1. Obtener el ID de la foto más grande
         foto_hd = datos["message"]["photo"][-1]
         file_id = foto_hd["file_id"]
         
-        # 2. EL HANDSHAKE: Preguntarle a Telegram la ruta (path)
-        # Hacemos una petición GET al método getFile
+        # 1. Pedir ruta a Telegram
         r_path = requests.get(f"{BASE_URL}/getFile?file_id={file_id}")
         resp_path = r_path.json()
         
-        if resp_path["ok"]:
+        print(f"🔍 DEBUG TELEGRAM RESPUESTA: {resp_path}") # <--- ESTO SALDRÁ EN LOS LOGS
+
+        if resp_path.get("ok"):
             file_path = resp_path["result"]["file_path"]
             
-            # 3. LA URL MÁGICA
-            # Construimos el link final combinando la base de archivos + el path
+            # 2. Construir URL
             url_descarga = f"{BASE_FILE_URL}/{file_path}"
             
-            mensaje = (
-                f"✅ **Enlace Generado**\n\n"
-                f"🔗 **Link Directo:**\n{url_descarga}\n\n"
-                f"⚠️ *Nota: Este link expira en 1 hora por seguridad de Telegram.*"
-            )
+            print(f"🔗 URL GENERADA: {url_descarga}") # <--- ESTO TAMBIÉN
+            
+            mensaje = f"Link generado:\n{url_descarga}"
         else:
-            mensaje = "❌ Error recuperando la ruta del archivo."
+            mensaje = f"❌ Error de Telegram: {resp_path}"
 
         requests.post(f"{BASE_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": mensaje,
-            "parse_mode": "Markdown" # Para que se vea bonito con negritas
+            "chat_id": chat_id, "text": mensaje
         })
-        
         return "OK", 200
 
-    # CASO 2: TEXTO NORMAL (Frases)
-    texto = datos["message"].get("text", "").lower()
-    
-    if "/foto" in texto:
-        # Tu lógica anterior de foto random
-        aleatorio = random.randint(1, 1000)
-        requests.post(f"{BASE_URL}/sendPhoto", json={
-            "chat_id": chat_id,
-            "photo": f"https://picsum.photos/seed/{aleatorio}/400/300",
-            "caption": "Imagen de prueba generada"
-        })
-    else:
-        # Frase random
-        requests.post(f"{BASE_URL}/sendMessage", json={
-            "chat_id": chat_id,
-            "text": random.choice(FRASES)
-        })
+    # RESPUESTA SIMPLE PARA QUE NO SE QUEDE CALLADO
+    requests.post(f"{BASE_URL}/sendMessage", json={
+        "chat_id": chat_id, "text": "Envíame una foto para probar."
+    })
 
     return "OK", 200
 
