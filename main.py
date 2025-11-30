@@ -12,12 +12,12 @@ TOGETHER_API_KEY = os.environ.get("TOGETHER_API_KEY", "").strip()
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 BASE_FILE_URL = f"https://api.telegram.org/file/bot{TELEGRAM_TOKEN}"
 
-# 1. Inicializamos el cliente como tú indicaste
+# Inicializamos el cliente de Together
 client = Together(api_key=TOGETHER_API_KEY)
 
 @app.route('/')
 def index():
-    return "GÉNESIS (Together Stream): ONLINE 🌊", 200
+    return "GÉNESIS VISION (Gemma 3n): ONLINE 💎", 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -29,10 +29,11 @@ def webhook():
 
     # --- LÓGICA DE VISIÓN ---
     if "photo" in datos["message"]:
+        # Avisamos que estamos "escribiendo"
         requests.post(f"{BASE_URL}/sendChatAction", json={"chat_id": chat_id, "action": "typing"})
 
         try:
-            # Obtener URL de la foto
+            # 1. Obtener URL de la foto desde Telegram
             foto_hd = datos["message"]["photo"][-1]
             file_id = foto_hd["file_id"]
             
@@ -45,53 +46,56 @@ def webhook():
             file_path = resp_path["result"]["file_path"]
             url_imagen = f"{BASE_FILE_URL}/{file_path}"
 
-            # 2. TU CÓDIGO (Adaptado para Visión)
-            # Usamos stream=True como pediste
+            # 2. LLAMADA A TOGETHER AI (MODELO GEMMA 3n)
+            # Este es el modelo que encontraste: google/gemma-3n-E4B-it
             response = client.chat.completions.create(
-                model="meta-llama/Llama-3.2-90B-Vision-Instruct-Turbo",
+                model="google/gemma-3n-E4B-it", 
                 messages=[
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "Describe esta imagen en español."},
+                            {"type": "text", "text": "Describe qué ves en esta imagen en español detalladamente."},
                             {"type": "image_url", "image_url": {"url": url_imagen}}
                         ]
                     }
                 ],
-                stream=True  # <--- TU REQUISITO
+                max_tokens=500,
+                temperature=0.7,
+                stream=False
             )
 
-            # 3. ACUMULADOR DE STREAM
-            # Como Telegram no acepta texto letra por letra, lo juntamos aquí
-            texto_completo = ""
-            
-            for token in response:
-                if hasattr(token, 'choices'):
-                    delta = token.choices[0].delta.content
-                    if delta:
-                        texto_completo += delta  # Vamos pegando las letras
+            # 3. Obtener respuesta
+            if response.choices:
+                analisis = response.choices[0].message.content
+                mensaje_final = f"💎 **Análisis Gemma 3n:**\n\n{analisis}"
+            else:
+                mensaje_final = "⚠️ La IA no devolvió respuesta."
 
-            # 4. ENVIAR RESULTADO FINAL
+            # 4. Enviar a Telegram
             requests.post(f"{BASE_URL}/sendMessage", json={
                 "chat_id": chat_id,
-                "text": f"👁️ **Análisis (Stream):**\n\n{texto_completo}",
+                "text": mensaje_final,
                 "parse_mode": "Markdown"
             })
 
         except Exception as e:
+            error_msg = str(e)
+            print(f"❌ ERROR: {error_msg}")
+            
+            # Mensaje de error amigable
             requests.post(f"{BASE_URL}/sendMessage", json={
                 "chat_id": chat_id, 
-                "text": f"❌ Error: {str(e)}"
+                "text": f"❌ Error de Sistema: {error_msg}"
             })
         
         return "OK", 200
 
-    # Si es texto normal
+    # Lógica para texto normal
     texto = datos["message"].get("text", "")
     if texto:
         requests.post(f"{BASE_URL}/sendMessage", json={
             "chat_id": chat_id,
-            "text": "Manda foto 📸"
+            "text": "Envíame una foto 📸. Quiero probar mis nuevos ojos (Gemma)."
         })
 
     return "OK", 200
