@@ -9,7 +9,6 @@ app = Flask(__name__)
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN").strip()
 BASE_URL = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}"
 
-# Frases para cuando NO piden foto
 FRASES = [
     "Eres mi pixel favorito.",
     "Contigo mi ping es de 0ms.",
@@ -19,7 +18,7 @@ FRASES = [
 
 @app.route('/')
 def index():
-    return "Bot Multimedia: ONLINE 📸", 200
+    return "Bot Detector de Fotos: ONLINE 👁️", 200
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
@@ -27,35 +26,49 @@ def webhook():
     if not datos or "message" not in datos:
         return "OK", 200
 
+    # Extraemos el Chat ID para saber a quién responder
     chat_id = datos["message"]["chat"]["id"]
-    texto = datos["message"].get("text", "").lower() # Convertimos a minúsculas
     
-    # --- LÓGICA DE COMANDOS ---
-    
-    # CASO 1: El usuario pide una FOTO (/foto)
+    # --- LÓGICA DE INTELIGENCIA ---
+
+    # CASO 1: ¿El usuario envió una FOTO? (Input de imagen)
+    if "photo" in datos["message"]:
+        # Telegram envía un array de fotos (thumbnails + original).
+        # La última [-1] es siempre la de mayor resolución.
+        foto_hd = datos["message"]["photo"][-1]
+        id_archivo = foto_hd["file_id"]
+        
+        # Responde con el ID (Prueba técnica)
+        mensaje_respuesta = f"📸 ¡Imagen detectada!\n\n🆔 File ID: {id_archivo}\n\n(Guarda este ID, es la llave para que la IA analice esta foto)."
+        
+        requests.post(f"{BASE_URL}/sendMessage", json={
+            "chat_id": chat_id,
+            "text": mensaje_respuesta
+        })
+        
+        return "OK", 200
+
+    # Si no es foto, intentamos leer texto
+    texto = datos["message"].get("text", "").lower()
+
+    # CASO 2: El usuario pide una FOTO (Comando)
     if "/foto" in texto:
-        # Generamos un número al azar para que la foto cambie siempre
         aleatorio = random.randint(1, 1000)
         url_imagen = f"https://picsum.photos/seed/{aleatorio}/400/300"
         
-        # Usamos el método sendPhoto
-        url_api = f"{BASE_URL}/sendPhoto"
-        payload = {
+        requests.post(f"{BASE_URL}/sendPhoto", json={
             "chat_id": chat_id,
             "photo": url_imagen,
-            "caption": "Aquí tienes tu imagen aleatoria 🎨" # Pie de foto opcional
-        }
-        requests.post(url_api, json=payload)
+            "caption": "Aquí tienes tu imagen aleatoria 🎨"
+        })
 
-    # CASO 2: Cualquier otra cosa (Respondemos con frase)
+    # CASO 3: Cualquier otro texto (Chat)
     else:
         frase = random.choice(FRASES)
-        url_api = f"{BASE_URL}/sendMessage"
-        payload = {
+        requests.post(f"{BASE_URL}/sendMessage", json={
             "chat_id": chat_id,
             "text": frase
-        }
-        requests.post(url_api, json=payload)
+        })
 
     return "OK", 200
 
